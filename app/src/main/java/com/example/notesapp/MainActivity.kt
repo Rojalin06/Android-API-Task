@@ -3,114 +3,63 @@ package com.example.notesapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import com.example.notesapp.ui.theme.NotesAppTheme
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val database = NoteDatabase.getDatabase(this)
-        val repository = NoteRepository(database.noteDao())
-
-        val viewModelFactory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return NotesViewModel(repository) as T
-            }
-        }
-
-        val viewModel = ViewModelProvider(this, viewModelFactory)[NotesViewModel::class.java]
-
         setContent {
-            NotesAppTheme {
-                NotesScreen(viewModel)
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                // Navigation Controller setup
+                val navController = rememberNavController()
+                SetupNavGraph(navController = navController)
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen(viewModel: NotesViewModel) {
-    val notes by viewModel.notes.collectAsState(initial = emptyList())
+fun PostListScreen(postViewModel: PostViewModel = viewModel(), navController: NavController) {
+    val posts = postViewModel.posts.value
+    val isLoading = postViewModel.isLoading.value
+    val error = postViewModel.errorMessage.value
 
-    var title by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { postViewModel.fetchPosts() }
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("My Notes App (Task 2)") }) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            // --- Input Section ---
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Title") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                label = { Text("Content") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    if (title.isNotEmpty() && content.isNotEmpty()) {
-                        viewModel.addNote(title, content)
-                        title = ""
-                        content = ""
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Save Note")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // --- List Section (Database Data) ---
+    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        } else if (error.isNotEmpty()) {
+            Text(text = error, color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Center))
+        } else {
             LazyColumn {
-                items(notes) { note ->
+                items(posts) { post ->
+                    // Card par click karne par Detail screen par jayenge
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 8.dp)
+                            .clickable {
+                                navController.navigate(Screen.Detail.createRoute(post.id))
+                            },
                         elevation = CardDefaults.cardElevation(4.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = note.title, style = MaterialTheme.typography.titleMedium)
-                                Text(text = note.content, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            // Delete Button
-                            IconButton(onClick = { viewModel.deleteNote(note) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete Note")
-                            }
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(text = post.title, fontWeight = FontWeight.Bold)
+                            Text(text = post.body, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                         }
                     }
                 }
